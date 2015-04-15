@@ -6,6 +6,7 @@ use Fcntl;
 use File::Temp 'tempfile';
 use Getopt::Long qw(:config bundling);
 use Fcntl qw(SEEK_SET SEEK_CUR);
+use File::Basename;
 
 # Read Pintos.pm from the same directory as this program.
 BEGIN { my $self = $0; $self =~ s%/+[^/]*$%%; require "$self/Pintos.pm"; }
@@ -256,7 +257,7 @@ sub set_disk {
 sub find_disks {
     # Find kernel, if we don't already have one.
     if (!exists $parts{KERNEL}) {
-	my $name = find_file (getcwd().'/../threads/build/kernel.bin');
+	my $name = find_file (dirname(__FILE__).'/../threads/build/kernel.bin');
 	die "Cannot find kernel\n" if !defined $name;
 	do_set_part ('KERNEL', 'file', $name);
     }
