@@ -114,8 +114,11 @@ sema_up (struct semaphore *sema)
 
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters)) 
+  { 
+    list_sort (&sema->waiters, priority_cmp, NULL); 
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem));
+                               struct thread, elem));
+  }
   sema->value++;
   intr_set_level (old_level);
 }
@@ -185,18 +188,31 @@ lock_init (struct lock *lock)
    To handle the case of nested blocking, donates the priority down
    the chain of blocking locks recursively. */
 void
-lock_donate (struct lock *lock)
+priority_donate (struct lock *lock)
 {
   if (lock->holder != NULL) 
   {
-    struct thread *curr = thread_current ();
-    struct thread *holder = lock->holder;
-    
-    if (curr->priority > holder->priority)
-      holder->priority = curr->priority;
-        
-    if (holder->block != NULL)
-      lock_donate (holder->block);    
+    thread_current ()->block = lock;
+    list_insert_ordered (&lock->holder->donators, &thread_current ()->donator, priority_cmp, NULL); 
+
+    struct thread *t = thread_current (); 
+    struct lock *l = lock;
+    while (l != NULL) 
+    { 
+      if (l->holder == NULL)
+      {
+        return; 
+      }
+
+      if (l->holder->priority >= t->priority)
+      {
+        return;
+      }
+
+      l->holder->priority = t->priority;
+      t = l->holder;
+      l = t->block;
+    }    
   }
 }
 
@@ -215,18 +231,15 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  struct thread *curr = thread_current ();
-
-  sema_down (&lock->don_sema);
-  lock_donate (lock);
-  sema_up (&lock->don_sema);
-
-  curr->block = lock;
+  enum intr_level old_level = intr_disable ();
+ 
+  priority_donate (lock);
+  
   sema_down (&lock->semaphore);
-  curr->block = NULL;
-  lock->holder = curr;
 
-  list_push_back (&curr->lock_list, &lock->elem);
+  thread_current ()->block = NULL;
+  lock->holder = thread_current ();
+  intr_set_level (old_level);
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -249,31 +262,42 @@ lock_try_acquire (struct lock *lock)
   return success;
 }
 
+/* Remove donators which are blocked by this thread from the donator list. */
+void
+remove_donators (struct lock *lock)
+{
+  struct list_elem *e = list_begin (&thread_current ()->donators);
+  while (e != list_end (&thread_current ()->donators))
+  {
+    struct thread *t = list_entry (e, struct thread, donator);
+
+    if (t->block == lock)
+    {
+      list_remove (e);
+    }
+
+    e = list_next (e);
+  }
+}
+
 /* Changes the priority of the holder of this lock to the consequent value. */
 void
-lock_rollback ()
+priority_rollback ()
 {
   struct thread *curr = thread_current ();  
  
-  int highest_priority = curr->origin_priority;
+  curr->priority = curr->origin_priority;
 
-  struct list_elem *e;
-  for (e = list_begin (&curr->lock_list);
-       e != list_end (&curr->lock_list);
-       e = list_next (e))
+  if (list_empty (&curr->donators))
   {
-    struct lock *l = list_entry (e, struct lock, elem);
-      
-    if (list_empty (&l->semaphore.waiters))
-      continue;
+    return;
+  }
 
-    struct thread *t = list_entry (list_front (&l->semaphore.waiters), struct thread, elem);
-
-    if (t->priority > highest_priority)
-      highest_priority = t->priority;
-  } 
-
-  curr->priority = highest_priority; 
+  struct thread *highest_donator = list_entry (list_front (&curr->donators), struct thread, donator);
+  if (highest_donator->priority > curr->priority)
+  {
+    curr->priority = highest_donator->priority;
+  }
 }
 
 /* Releases LOCK, which must be owned by the current thread.
@@ -287,13 +311,17 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
+  enum intr_level old_level = intr_disable ();
+  
   lock->holder = NULL;
 
-  list_remove (&lock->elem);
+  remove_donators (lock);
 
-  lock_rollback ();  
+  priority_rollback ();  
 
   sema_up (&lock->semaphore);
+
+  intr_set_level (old_level);
 }
 
 /* Returns true if the current thread holds LOCK, false
