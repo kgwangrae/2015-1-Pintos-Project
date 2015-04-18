@@ -291,6 +291,9 @@ thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
+  if (strcmp(thread_current()->name,"main") == 0) {
+    thread_print_stats ();
+  }
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
