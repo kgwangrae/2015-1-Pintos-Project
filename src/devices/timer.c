@@ -7,7 +7,9 @@
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
-  
+#include <list.h>
+#include <stddef.h>
+
 /* See [8254] for hardware details of the 8254 timer chip. */
 
 #if TIMER_FREQ < 19
@@ -30,6 +32,9 @@ static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
 
+/* Wait queue containing sleeping processes. */
+static struct list wait_queue;
+
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
 void
@@ -37,6 +42,7 @@ timer_init (void)
 {
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
+  list_init (&wait_queue);
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -84,16 +90,26 @@ timer_elapsed (int64_t then)
   return timer_ticks () - then;
 }
 
-/* Sleeps for approximately TICKS timer ticks.  Interrupts must
-   be turned on. */
+/* Sleeps for approximately TICKS timer ticks. NOTE: Interrupts must
+   be turned on to ensure timer interrupts always happen. */
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
-
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+
+  /* Preemption must not occur while executing the code below.
+     Therefore, disabling interrupts is necessary. */
+  enum intr_level old_level = intr_disable ();
+
+  /* Set wakeup tick */
+  struct thread *curr_thread = thread_current ();
+  curr_thread->wakeup_tick = timer_ticks () + ticks;
+  
+  /* Push it to the wait_queue. */
+  list_push_back (&wait_queue, &curr_thread->waitelem);
+  thread_block ();
+
+  intr_set_level (old_level);
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -165,12 +181,27 @@ timer_print_stats (void)
 {
   printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
-
-/* Timer interrupt handler. */
+
+/* Timer interrupt handler. Assume interrupt is off, 
+ * because this is an interrupt handler. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
+  
+  /* Check for the wait_queue to wake some threads up. */
+  struct thread *t;
+  struct list_elem *e;
+  for (e = list_begin (&wait_queue); e != list_end (&wait_queue);
+       e = list_next (e))
+  {
+    t = list_entry (e, struct thread, waitelem);
+    if (t->wakeup_tick <= ticks) {
+      list_remove (&t->waitelem);
+      thread_unblock (t);
+    }
+  }
+
   thread_tick ();
 }
 

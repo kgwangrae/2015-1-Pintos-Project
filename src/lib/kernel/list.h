@@ -21,7 +21,7 @@
           ...other members...
         };
 
-   Then a list of `struct foo' can be be declared and initialized
+   Then a list of `struct foo' can be declared and initialized
    like so:
 
       struct list foo_list;
