@@ -108,6 +108,7 @@ struct thread
 
     /* Managed by timer.c */
     int64_t wakeup_tick;                /* Thread wakes up at this tick. */
+    bool is_awake;
     struct list_elem waitelem;          /* List element for the wait queue. */
   };
 
