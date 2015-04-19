@@ -135,8 +135,8 @@ thread_tick (void)
     kernel_ticks++;
 
   /* Enforce preemption. */
-  if (++thread_ticks >= TIME_SLICE)
-    intr_yield_on_return ();
+/*  if (++thread_ticks >= TIME_SLICE)
+    intr_yield_on_return (); */
 }
 
 /* Prints thread statistics. */
@@ -198,8 +198,13 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+
   /* Add to run queue. */
   thread_unblock (t);
+
+  /* Rescheduling */
+  if (priority > thread_current()->priority)
+    thread_yield ();
 
   return tid;
 }
@@ -239,7 +244,9 @@ thread_unblock (struct thread *t)
   ASSERT (t->status == THREAD_BLOCKED);
   list_insert_ordered (&ready_list, &t->elem, priority_cmp, NULL);
   t->status = THREAD_READY;
-  intr_set_level (old_level);
+  if (thread_current () != idle_thread)
+    thread_yield (); 
+   intr_set_level (old_level);
 }
 
 /* Returns the name of the running thread. */
@@ -341,7 +348,21 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  struct thread *curr = thread_current ();
+
+  int old_priority = curr->priority;
+  curr->origin_priority = new_priority;
+
+  priority_rollback (); // recalculate the consequent priority
+
+  // If new priority is greater than old one, donates the priority
+  if (old_priority < curr->priority)
+    priority_donate ();
+  
+  // If new priority is less than old one, rescheduling
+  if (old_priority > curr->priority)
+    thread_yield ();
+  //thread_current ()->priority = new_priority;
 }
 
 /* Returns the current thread's priority. */
