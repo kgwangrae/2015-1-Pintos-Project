@@ -25,7 +25,7 @@ struct lock
   };
 
 void lock_init (struct lock *);
-void priority_donate (struct lock *);
+void priority_donate (void);
 void lock_acquire (struct lock *);
 bool lock_try_acquire (struct lock *);
 void remove_donators (struct lock *);

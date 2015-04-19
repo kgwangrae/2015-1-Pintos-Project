@@ -115,7 +115,6 @@ sema_up (struct semaphore *sema)
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters)) 
   { 
-    list_sort (&sema->waiters, priority_cmp, NULL); 
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
                                struct thread, elem));
   }
@@ -188,31 +187,21 @@ lock_init (struct lock *lock)
    To handle the case of nested blocking, donates the priority down
    the chain of blocking locks recursively. */
 void
-priority_donate (struct lock *lock)
+priority_donate ()
 {
-  if (lock->holder != NULL) 
-  {
-    thread_current ()->block = lock;
-    list_insert_ordered (&lock->holder->donators, &thread_current ()->donator, priority_cmp, NULL); 
-
-    struct thread *t = thread_current (); 
-    struct lock *l = lock;
-    while (l != NULL) 
-    { 
-      if (l->holder == NULL)
-      {
-        return; 
-      }
-
-      if (l->holder->priority >= t->priority)
-      {
-        return;
-      }
-
-      l->holder->priority = t->priority;
-      t = l->holder;
-      l = t->block;
-    }    
+  struct thread *t = thread_current (); 
+  struct lock *l = t->block;
+  while (l != NULL) 
+  { 
+    if (l->holder == NULL)
+      return; 
+    
+    if (l->holder->priority >= t->priority)
+      return;
+    
+    l->holder->priority = t->priority;
+    t = l->holder;
+    l = t->block;
   }
 }
 
@@ -233,7 +222,13 @@ lock_acquire (struct lock *lock)
 
   enum intr_level old_level = intr_disable ();
  
-  priority_donate (lock);
+  if (lock->holder != NULL)
+  { 
+    thread_current ()->block = lock;
+    list_insert_ordered (&lock->holder->donators, &thread_current ()->donator, priority_cmp, NULL); 
+  }
+
+  priority_donate ();
   
   sema_down (&lock->semaphore);
 
