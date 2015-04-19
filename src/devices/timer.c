@@ -104,11 +104,12 @@ timer_sleep (int64_t ticks)
   /* Set wakeup tick */
   struct thread *curr_thread = thread_current ();
   curr_thread->wakeup_tick = timer_ticks () + ticks;
-  
+  curr_thread->is_awake = false;
+
   /* Push it to the wait_queue. */
   list_push_back (&wait_queue, &curr_thread->waitelem);
   thread_block ();
-
+  
   intr_set_level (old_level);
 }
 
@@ -196,8 +197,9 @@ timer_interrupt (struct intr_frame *args UNUSED)
        e = list_next (e))
   {
     t = list_entry (e, struct thread, waitelem);
-    if (t->wakeup_tick <= ticks) {
+    if (t->wakeup_tick <= ticks && !t->is_awake) {
       list_remove (&t->waitelem);
+      t->is_awake = true;
       thread_unblock (t);
     }
   }

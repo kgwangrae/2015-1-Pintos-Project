@@ -237,16 +237,16 @@ void
 thread_unblock (struct thread *t) 
 {
   enum intr_level old_level;
-
+  
   ASSERT (is_thread (t));
-
   old_level = intr_disable ();
+  
   ASSERT (t->status == THREAD_BLOCKED);
   list_insert_ordered (&ready_list, &t->elem, priority_cmp, NULL);
   t->status = THREAD_READY;
   if (thread_current () != idle_thread)
     thread_yield (); 
-   intr_set_level (old_level);
+  intr_set_level (old_level);
 }
 
 /* Returns the name of the running thread. */
@@ -298,7 +298,6 @@ thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
-  list_remove (&thread_current()->waitelem);
   if (strcmp(thread_current ()->name, "main") == 0)
   {
     /* If this makes something wrong then remove it. */
@@ -492,6 +491,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->origin_priority = priority;
   t->magic = THREAD_MAGIC;
+  t->is_awake = true;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
