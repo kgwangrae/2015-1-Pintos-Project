@@ -68,6 +68,7 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
+      priority_donate ();
       list_insert_ordered (&sema->waiters, &thread_current ()->elem, priority_cmp, NULL);
       thread_block ();
     }
@@ -114,11 +115,16 @@ sema_up (struct semaphore *sema)
 
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters)) 
-  { 
+  {
+    list_sort (&sema->waiters, priority_cmp, NULL); 
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
                                struct thread, elem));
   }
   sema->value++;
+
+  if (!intr_context ())
+    change_running_thread ();
+
   intr_set_level (old_level);
 }
 
@@ -183,28 +189,6 @@ lock_init (struct lock *lock)
   sema_init (&lock->semaphore, 1);
 }
 
-/* Donates the priority of the current thread to the holder of the lock.
-   To handle the case of nested blocking, donates the priority down
-   the chain of blocking locks recursively. */
-void
-priority_donate ()
-{
-  struct thread *t = thread_current (); 
-  struct lock *l = t->block;
-  while (l != NULL) 
-  { 
-    if (l->holder == NULL)
-      return; 
-    
-    if (l->holder->priority >= t->priority)
-      return;
-    
-    l->holder->priority = t->priority;
-    t = l->holder;
-    l = t->block;
-  }
-}
-
 /* Acquires LOCK, sleeping until it becomes available if
    necessary.  The lock must not already be held by the current
    thread.
@@ -228,8 +212,6 @@ lock_acquire (struct lock *lock)
     list_insert_ordered (&lock->holder->donators, &thread_current ()->donator, priority_cmp, NULL); 
   }
 
-  priority_donate ();
-  
   sema_down (&lock->semaphore);
 
   thread_current ()->block = NULL;
@@ -255,44 +237,6 @@ lock_try_acquire (struct lock *lock)
   if (success)
     lock->holder = thread_current ();
   return success;
-}
-
-/* Remove donators which are blocked by this thread from the donator list. */
-void
-remove_donators (struct lock *lock)
-{
-  struct list_elem *e = list_begin (&thread_current ()->donators);
-  while (e != list_end (&thread_current ()->donators))
-  {
-    struct thread *t = list_entry (e, struct thread, donator);
-
-    if (t->block == lock)
-    {
-      list_remove (e);
-    }
-
-    e = list_next (e);
-  }
-}
-
-/* Changes the priority of the holder of this lock to the consequent value. */
-void
-priority_rollback ()
-{
-  struct thread *curr = thread_current ();  
- 
-  curr->priority = curr->origin_priority;
-
-  if (list_empty (&curr->donators))
-  {
-    return;
-  }
-
-  struct thread *highest_donator = list_entry (list_front (&curr->donators), struct thread, donator);
-  if (highest_donator->priority > curr->priority)
-  {
-    curr->priority = highest_donator->priority;
-  }
 }
 
 /* Releases LOCK, which must be owned by the current thread.
@@ -379,7 +323,7 @@ cond_wait (struct condition *cond, struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
   
   sema_init (&waiter.semaphore, 0);
-  list_push_back (&cond->waiters, &waiter.elem);
+  list_insert_ordered (&cond->waiters, &waiter.elem, sema_priority_cmp, NULL);
   lock_release (lock);
   sema_down (&waiter.semaphore);
   lock_acquire (lock);
@@ -401,6 +345,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (lock_held_by_current_thread (lock));
 
   if (!list_empty (&cond->waiters)) 
+    list_sort (&cond->waiters, sema_priority_cmp, NULL);
     sema_up (&list_entry (list_pop_front (&cond->waiters),
                           struct semaphore_elem, elem)->semaphore);
 }
@@ -419,4 +364,87 @@ cond_broadcast (struct condition *cond, struct lock *lock)
 
   while (!list_empty (&cond->waiters))
     cond_signal (cond, lock);
+}
+
+/* Donates the priority of the current thread to the holder of the lock.
+   To handle the case of nested blocking, donates the priority down
+   the chain of blocking locks recursively. */
+void
+priority_donate ()
+{
+  struct thread *t = thread_current (); 
+  struct lock *l = t->block;
+  
+  while (l != NULL) 
+  { 
+    if (l->holder == NULL)
+      return; 
+    
+    if (l->holder->priority >= t->priority)
+      return;
+    
+    l->holder->priority = t->priority;
+    t = l->holder;
+    l = t->block;
+  }
+}
+
+/* Remove donators which are blocked by this thread from the donator list. */
+void
+remove_donators (struct lock *lock)
+{
+  struct list_elem *e = list_begin (&thread_current ()->donators);
+  while (e != list_end (&thread_current ()->donators))
+  {
+    struct thread *t = list_entry (e, struct thread, donator);
+
+    if (t->block == lock)
+    {
+      list_remove (e);
+    }
+
+    e = list_next (e);
+  }
+}
+
+/* Changes the priority of the holder of this lock to the consequent value. */
+void
+priority_rollback ()
+{
+  struct thread *curr = thread_current ();  
+ 
+  curr->priority = curr->origin_priority;
+
+  if (list_empty (&curr->donators))
+  {
+    return;
+  }
+
+  struct thread *highest_donator = list_entry (list_front (&curr->donators), struct thread, donator);
+  if (highest_donator->priority > curr->priority)
+  {
+    curr->priority = highest_donator->priority;
+  }
+}
+
+/* Compare the priority of the first element of two semaphore's waiters */
+bool
+sema_priority_cmp (const struct list_elem *a, const struct list_elem *b, void *aux)
+{
+  struct semaphore_elem *sa = list_entry (a, struct semaphore_elem, elem);
+  struct semaphore_elem *sb = list_entry (b, struct semaphore_elem, elem);
+
+  if (list_empty (&sb->semaphore.waiters))
+    return true;
+
+  if (list_empty (&sa->semaphore.waiters))
+    return false;
+
+  list_sort (&sa->semaphore.waiters, priority_cmp, NULL);
+  list_sort (&sb->semaphore.waiters, priority_cmp, NULL);
+
+  struct thread *ta = list_entry (list_front (&sa->semaphore.waiters), struct thread, elem);
+  struct thread *tb = list_entry (list_front (&sb->semaphore.waiters), struct thread, elem);
+
+  return ta->priority > tb->priority;
 }

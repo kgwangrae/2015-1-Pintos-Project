@@ -148,6 +148,7 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+void change_running_thread (void);
 bool priority_cmp (const struct list_elem *a, const struct list_elem *b, void *aux);
 
 #endif /* threads/thread.h */
