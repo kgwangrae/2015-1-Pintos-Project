@@ -91,8 +91,8 @@ struct thread
     int origin_priority;                /* Origin priority */
     struct list_elem allelem;           /* List element for all threads list. */
 
-    struct list donators;         /* List of threads which donate the priority to this thread. */
-    struct list_elem donator;     /* Donator list elem */
+    struct list waiters;         /* List of threads which are waiting for locks acquired by this thread. */
+    struct list_elem waiter;     /* Waiter list elem */
     struct lock *block;			/* Lock by which this thread is blocked. */    
 
     /* Shared between thread.c and synch.c. */

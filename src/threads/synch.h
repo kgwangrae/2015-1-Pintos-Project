@@ -45,7 +45,7 @@ void cond_broadcast (struct condition *, struct lock *);
 
 void priority_donate (void);
 void priority_rollback (void);
-void remove_donators (struct lock *);
+void remove_waiters (struct lock *);
 bool sema_priority_cmp (const struct list_elem *a, const struct list_elem *b, void *aux);
 
 /* Optimization barrier.

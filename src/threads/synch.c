@@ -68,7 +68,7 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-      priority_donate ();
+//      priority_donate ();
       list_insert_ordered (&sema->waiters, &thread_current ()->elem, priority_cmp, NULL);
       thread_block ();
     }
@@ -200,16 +200,18 @@ lock_init (struct lock *lock)
 void
 lock_acquire (struct lock *lock)
 {
+  enum intr_level old_level;
+
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  enum intr_level old_level = intr_disable ();
- 
+  old_level = intr_disable ();
   if (lock->holder != NULL)
   { 
     thread_current ()->block = lock;
-    list_insert_ordered (&lock->holder->donators, &thread_current ()->donator, priority_cmp, NULL); 
+    list_insert_ordered (&lock->holder->waiters, &thread_current ()->waiter, priority_cmp, NULL); 
+    priority_donate ();
   }
 
   sema_down (&lock->semaphore);
@@ -247,14 +249,15 @@ lock_try_acquire (struct lock *lock)
 void
 lock_release (struct lock *lock) 
 {
+  enum intr_level old_level; 
+
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
-  enum intr_level old_level = intr_disable ();
-  
+  old_level = intr_disable ();
   lock->holder = NULL;
 
-  remove_donators (lock);
+  remove_waiters (lock);
 
   priority_rollback ();  
 
@@ -389,14 +392,14 @@ priority_donate ()
   }
 }
 
-/* Remove donators which are blocked by this thread from the donator list. */
+/* Remove threads which are blocked by this lock from the waiter list. */
 void
-remove_donators (struct lock *lock)
+remove_waiters (struct lock *lock)
 {
-  struct list_elem *e = list_begin (&thread_current ()->donators);
-  while (e != list_end (&thread_current ()->donators))
+  struct list_elem *e = list_begin (&thread_current ()->waiters);
+  while (e != list_end (&thread_current ()->waiters))
   {
-    struct thread *t = list_entry (e, struct thread, donator);
+    struct thread *t = list_entry (e, struct thread, waiter);
 
     if (t->block == lock)
     {
@@ -415,15 +418,15 @@ priority_rollback ()
  
   curr->priority = curr->origin_priority;
 
-  if (list_empty (&curr->donators))
+  if (list_empty (&curr->waiters))
   {
     return;
   }
 
-  struct thread *highest_donator = list_entry (list_front (&curr->donators), struct thread, donator);
-  if (highest_donator->priority > curr->priority)
+  struct thread *highest_waiter = list_entry (list_front (&curr->waiters), struct thread, waiter);
+  if (highest_waiter->priority > curr->priority)
   {
-    curr->priority = highest_donator->priority;
+    curr->priority = highest_waiter->priority;
   }
 }
 
