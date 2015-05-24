@@ -24,6 +24,9 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+/* Minimum file descriptor. 0 and 1 is reserved for STDIN and STDOUT */
+#define MIN_FD 2
+
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -110,6 +113,10 @@ struct thread
     int64_t wakeup_tick;                /* Thread wakes up at this tick. */
     bool is_awake;
     struct list_elem waitelem;          /* List element for the wait queue. */
+
+    /* For file management */
+    int fd_avail;                       /* Next available file descriptor. */
+    struct list files;                  /* List of open files */
   };
 
 /* If false (default), use round-robin scheduler.

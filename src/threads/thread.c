@@ -494,8 +494,14 @@ init_thread (struct thread *t, const char *name, int priority)
   t->is_awake = true;
 
   old_level = intr_disable ();
+  
   list_push_back (&all_list, &t->allelem);
   list_init (&t->donators);
+
+  // File system init
+  list_init (&t->files);
+  t->fd_avail = MIN_FD;
+
   intr_set_level (old_level);
 }
 
