@@ -202,9 +202,8 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
-  /* Rescheduling */
-  if (priority > thread_current()->priority)
-    thread_yield ();
+  /* Change the running thread */
+  change_running_thread ();
 
   return tid;
 }
@@ -244,8 +243,6 @@ thread_unblock (struct thread *t)
   ASSERT (t->status == THREAD_BLOCKED);
   list_insert_ordered (&ready_list, &t->elem, priority_cmp, NULL);
   t->status = THREAD_READY;
-  if (thread_current () != idle_thread)
-    thread_yield (); 
   intr_set_level (old_level);
 }
 
@@ -347,9 +344,13 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
+  enum intr_level old_level;
+  int old_priority;
   struct thread *curr = thread_current ();
 
-  int old_priority = curr->priority;
+  old_level = intr_disable ();
+  //thread_current ()->priority = new_priority;
+  old_priority = curr->priority;
   curr->origin_priority = new_priority;
 
   priority_rollback (); // recalculate the consequent priority
@@ -360,8 +361,9 @@ thread_set_priority (int new_priority)
   
   // If new priority is less than old one, rescheduling
   if (old_priority > curr->priority)
-    thread_yield ();
-  //thread_current ()->priority = new_priority;
+    change_running_thread ();
+
+  intr_set_level (old_level);
 }
 
 /* Returns the current thread's priority. */
@@ -496,12 +498,12 @@ init_thread (struct thread *t, const char *name, int priority)
   old_level = intr_disable ();
   
   list_push_back (&all_list, &t->allelem);
-  list_init (&t->donators);
 
   // File system init
   list_init (&t->files);
   t->fd_avail = MIN_FD;
 
+  list_init (&t->waiters);
   intr_set_level (old_level);
 }
 
@@ -613,6 +615,19 @@ allocate_tid (void)
   lock_release (&tid_lock);
 
   return tid;
+}
+
+/* Change the running thread according to priority */
+void
+change_running_thread ()
+{
+  if (list_empty (&ready_list))
+    return;
+
+  struct thread *t = list_entry (list_front (&ready_list), struct thread, elem);
+
+  if (thread_current ()->priority < t->priority)
+    thread_yield ();
 }
 
 /* Compare the priority of two threads */
