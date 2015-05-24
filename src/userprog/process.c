@@ -20,6 +20,8 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+void return_exit (struct thread *t, int tid, int status);
+int get_exit (struct thread *t, tid_t tid);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -59,13 +61,26 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+ 
+  struct thread *cur = thread_current ();
+  
   success = load (file_name, &if_.eip, &if_.esp);
 
-  /* If load failed, quit. */
-  palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
+  /* If load failed, quit */
+  if (!success)
+  {
+    palloc_free_page (file_name);
+    cur->tid = -1;			
+    sema_up (&cur->sema_success);		/* sync with exec() */
+    sema_down (&cur->sema_success);
+    cur->exit_status = -1;
+    thread_exit ();    
+  }
 
+  sema_up (&cur->sema_success);
+  sema_down (&cur->sema_success);		/* sync with exec() */
+
+  palloc_free_page (file_name);
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -86,9 +101,26 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-  return -1;
+  struct thread *t = get_thread (child_tid);
+  int status = -1;
+
+  if (t == NULL)	/* If child_tid does not refer to a direct child of the calling process, return -1 */
+    return status;
+
+  if (t->status==THREAD_DYING || t->exit) 	/* If the child process already exited, return the saved exit status */
+  {
+    status = get_exit (thread_current (), child_tid);
+    return status;
+  }
+
+  t->isWaited = true;
+  sema_down (&t->parent->sema_wait);	/* Parent process waits for the exit of child process */ 
+  
+  status = get_exit (thread_current (), child_tid);
+
+  return status;
 }
 
 /* Free the current process's resources. */
@@ -110,6 +142,24 @@ process_exit (void)
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
+
+      printf("%s: exit(%d)\n", cur->name, cur->exit_status);	/* Print the process termination message. */
+  
+      return_exit (cur->parent, cur->tid, cur->exit_status);	/* Return the exit status of this process to its parent. */
+      cur->exit = true;
+
+      if (cur->parent!=NULL && cur->isWaited)		/* Notify the exit of this process to the waiting parent process. */ 
+      {
+        while (!list_empty (&cur->parent->sema_wait.waiters))
+	  sema_up (&cur->parent->sema_wait);           
+      }	
+
+      while (!list_empty (&cur->children_status))	/* Free the exit_data resources of this process. */
+      {
+        struct exit_data *exit = list_entry (list_pop_front (&cur->children_status), struct exit_data, elem);
+	free (exit);
+      }
+    
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
@@ -462,4 +512,35 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+/* Return the exit status of a child ot its parent. */
+void
+return_exit (struct thread *t, int tid, int status)
+{
+  struct exit_data *exit = (struct exit_data *) malloc (sizeof (struct exit_data));
+  exit->status = status;
+  exit->tid = tid;
+  list_push_back (&t->children_status,&exit->elem);
+}
+
+/* Get the exit status of the child which has given tid. */  
+int
+get_exit (struct thread *t, tid_t tid)
+{
+  struct list_elem *e;
+  int status = -1;
+  
+  for (e = list_begin (&t->children_status); e != list_end (&t->children_status); e = list_next (e))
+  {
+    struct exit_data *exit = list_entry (e, struct exit_data, elem);
+    if (exit->tid == tid)
+    {
+      status = exit->status;
+      exit->status = -1;	/* To prevent duplicate wait call */
+      break;
+    }
+  }
+  
+  return status;
 }
