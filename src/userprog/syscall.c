@@ -1,7 +1,6 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include <syscall-nr.h>
-#include <user/syscall.h>
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
@@ -284,8 +283,34 @@ void close (int fd)
   lock_release(&fs_lock); 
 }
 
-//Not implemented yet
-//halt()
-//void exit (int status) NO_RETURN;
-//pid_t exec (const char *file);
-//int wait (pid_t);
+
+void halt (void)
+{
+  shutdown_power_off ();
+}
+
+// Operations for process management
+
+void exit (int status)
+{
+  struct thread *cur = thread_current ();
+  
+  cur->exit_status = status;
+  thread_exit ();
+}
+
+pid_t exec (const char *file)
+{
+  pid_t pid = process_execute (file);
+
+  struct thread *t = get_thread (pid);
+  sema_down (&t->sema_success);
+  sema_up (&t->sema_success);
+
+  return t->tid;
+}
+
+int wait (pid_t pid)
+{
+  return process_wait (pid);
+}

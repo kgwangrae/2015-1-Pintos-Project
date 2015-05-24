@@ -182,6 +182,7 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+  t->parent = thread_current ();
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -495,6 +496,16 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
   t->is_awake = true;
 
+#ifdef USERPROG
+  t->parent = NULL;
+  t->exit = false;
+  t->isWaited = false;
+  t->status = -1;
+  list_init (&t->children_status);
+  sema_init (&t->sema_wait,0);
+  sema_init (&t->sema_success,0);
+#endif  
+
   old_level = intr_disable ();
   
   list_push_back (&all_list, &t->allelem);
@@ -643,7 +654,29 @@ priority_cmp (const struct list_elem *a, const struct list_elem *b, void *aux)
  return ta->priority > tb->priority;
 }
 
-
+/* Get thread from tid */
+struct thread *
+get_thread (tid_t tid)
+{
+  enum intr_level old_level;
+  old_level = intr_disable();
+  struct list_elem *e;
+
+  for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e))
+  {
+    struct thread *t = list_entry (e, struct thread, allelem);
+  
+    if (t->tid == tid)
+    {
+      intr_set_level (old_level);
+      return t;
+    }
+  }
+  
+  intr_set_level (old_level);
+  return NULL;
+}
+
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
