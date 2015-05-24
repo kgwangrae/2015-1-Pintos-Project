@@ -3,6 +3,8 @@
 
 #include <stdbool.h>
 #include <debug.h>
+#include "filesys/file.h"
+#include "threads/thread.h"
 
 #define SYSCALL_ERROR -1
 
@@ -39,5 +41,19 @@ int write (int fd, const void *buffer, unsigned length);
 void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
+
+/* Process file definitions */ 
+
+struct process_file 
+{
+  struct file *file;
+  int fd;
+  struct list_elem elem;
+};
+
+int pf_add (struct file *new_file);
+struct file* pf_get (int fd);
+void pf_close (int fd); 
+void pf_close_all (void);
 
 #endif /* lib/user/syscall.h */

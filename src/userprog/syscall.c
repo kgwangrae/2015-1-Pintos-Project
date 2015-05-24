@@ -1,13 +1,12 @@
 #include "userprog/syscall.h"
+#include "userprog/process.h"
 #include <stdio.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/synch.h"
-#include "threads/thread.h"
 #include "threads/malloc.h"
 #include "devices/shutdown.h"
-#include "devices/Input.h"
-#include "filesys/file.h"
+#include "devices/input.h"
 #include "filesys/filesys.h"
 
 #define MAX_ARGS 3
@@ -85,13 +84,6 @@ static void syscall_handler (struct intr_frame *f UNUSED)
 }
 
 // File system operations below
-
-struct process_file 
-{
-  struct file *file;
-  int fd;
-  struct list_elem elem;
-};
 
 int pf_add (struct file *new_file)
 {
@@ -207,9 +199,10 @@ int read (int fd, void *buffer, unsigned length) {
   if (fd == STDIN_FILENO) 
   {
     uint8_t *buf = (uint8_t *) buffer; // 1byte char array
-    for (unsigned i = 0; i < length; i++) 
+    unsigned i;
+    for (i = 0; i < length; i++) 
     {
-      buf[i] = Input_getc();
+      buf[i] = input_getc();
       // buf size limit?
     } 
     return length;
