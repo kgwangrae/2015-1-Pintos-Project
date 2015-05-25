@@ -500,7 +500,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->parent = NULL;
   t->exit = false;
   t->isWaited = false;
-  t->status = -1;
+  t->exit_status = -1;
   list_init (&t->children_status);
   sema_init (&t->sema_wait,0);
   sema_init (&t->sema_success,0);
