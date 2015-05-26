@@ -30,6 +30,7 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
+  printf("?\n");
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -40,19 +41,42 @@ process_execute (const char *file_name)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+  if (tid == TID_ERROR){
+    palloc_free_page (fn_copy);
+    printf("error");
+  }
+     
   return tid;
 }
+
 
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *file_name_)
+start_process (void *args_)  //(void *file_name_)
 {
-  char *file_name = file_name_;
+  char *token, *save_ptr;
+  char *argv_ptr[50];
+  int argc = 0;
+
+  char *file_name = args_; //file_name_;
   struct intr_frame if_;
   bool success;
+
+  /* if, no argument or too long */
+  if(argc == 1 || argv_length(*argv) > 128 ) {
+    printf("%S", "error : no option\n");
+    return 0;
+  }
+
+  for(token = strtok_r (file_name, " ", &save_ptr) ;
+    token != NULL ;
+    token = strtok_r (NULL, " ", &save_ptr), argc++)
+  {
+    argv_ptr[argc] = token;
+  }
+
+  strlcpy(thread_current()->name, file_name, (strlen(file_name)+1));
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -61,10 +85,63 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
+  char *argv_in_stack[50];
+
   /* If load failed, quit. */
-  palloc_free_page (file_name);
-  if (!success) 
+  if (!success) {
+    palloc_free_page (file_name);
     thread_exit ();
+  }
+
+  else {
+    
+    int i,size;
+  
+    /* push the element of argv in reverse order */
+    for(i=(argc-1);i>=0;i--)
+    {
+      printf("\n\n %d \n\n", i);
+      size = (strlen(argv_ptr[i])+1) * (sizeof (char));
+      if_.esp -= size;
+        memcpy(if_.esp, argv_ptr[i], size);
+      argv_in_stack[i] = if_.esp;
+    }
+    
+    /* word-align */
+    i = 4 - ((PHYS_BASE - if_.esp) % 4);
+      if(i!=0)
+    {
+      if_.esp -= (i * sizeof (uint8_t));
+      memset(if_.esp, 0, (i * sizeof (uint8_t)));
+    }
+    
+    /* push address of argv */
+    char **argv_addr;
+    if_.esp -= (sizeof (char *));
+    memset(if_.esp, 0, (sizeof (char *)));
+    for(i=argc-1; i>=0; i--)
+    {
+      if_.esp -= (sizeof (char *));
+      memcpy(if_.esp, &argv_in_stack[i], (sizeof (char *)));
+      if(i==0)
+        argv_addr = if_.esp;
+    }
+    
+    /* push the start address of argv */
+    if_.esp -= (sizeof (char **));
+    memcpy(if_.esp, &argv_addr, (sizeof (char **)));
+    
+    /* push argc */
+    if_.esp -= (sizeof (int));
+    memcpy(if_.esp, &argc, (sizeof (int)));
+
+    /* push retrun address */
+    if_.esp -= (sizeof (void (*) ()));
+    memset(if_.esp, 0, (sizeof (void (*) ())));
+
+  }
+
+  palloc_free_page(file_name);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
