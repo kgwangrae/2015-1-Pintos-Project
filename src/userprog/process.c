@@ -30,7 +30,6 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
-  printf("?\n");
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -62,12 +61,6 @@ start_process (void *args_)  //(void *file_name_)
   char *file_name = args_; //file_name_;
   struct intr_frame if_;
   bool success;
-
-  /* if, no argument or too long */
-  if(argc == 1 || argv_length(*argv) > 128 ) {
-    printf("%S", "error : no option\n");
-    return 0;
-  }
 
   for(token = strtok_r (file_name, " ", &save_ptr) ;
     token != NULL ;
