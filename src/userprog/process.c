@@ -31,6 +31,13 @@ process_execute (const char *file_name)
   char *fn_copy;
   tid_t tid;
 
+  char *temp = malloc(sizeof(char)*(strlen(file_name)));
+  char *fn;
+  char *save_ptr;
+
+  strlcpy(temp, file_name, strlen(file_name));
+  fn = strtok_r(temp, " ", &save_ptr);
+
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
@@ -39,11 +46,12 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (fn, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR){
     palloc_free_page (fn_copy);
     printf("error");
   }
+  free(temp);
      
   return tid;
 }
@@ -68,8 +76,6 @@ start_process (void *args_)  //(void *file_name_)
   {
     argv_ptr[argc] = token;
   }
-
-  strlcpy(thread_current()->name, file_name, (strlen(file_name)+1));
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
