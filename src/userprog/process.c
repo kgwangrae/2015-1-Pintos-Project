@@ -38,16 +38,14 @@ process_execute (const char *file_name)
   char *fn;
   char *save_ptr;
 
-  strlcpy(temp, file_name, strlen(file_name));
-  fn = strtok_r(temp, " ", &save_ptr);
-
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
-
+  fn = strtok_r (file_name, " ", &save_ptr);
+  
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (fn, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR){
@@ -63,22 +61,16 @@ process_execute (const char *file_name)
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *args_)  //(void *file_name_)
+start_process (void *file_name) 
 {
   char *token, *save_ptr;
   char *argv_ptr[50];
   int argc = 0;
 
-  char *file_name = args_; //file_name_;
   struct intr_frame if_;
   bool success;
 
-  for(token = strtok_r (file_name, " ", &save_ptr) ;
-    token != NULL ;
-    token = strtok_r (NULL, " ", &save_ptr), argc++)
-  {
-    argv_ptr[argc] = token;
-  }
+  token = strtok_r (file_name, " ", &save_ptr); // get file name
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -88,7 +80,7 @@ start_process (void *args_)  //(void *file_name_)
  
   struct thread *cur = thread_current ();
   
-  success = load (file_name, &if_.eip, &if_.esp);
+  success = load (token, &if_.eip, &if_.esp);
 
   char *argv_in_stack[50];
 
@@ -103,56 +95,60 @@ start_process (void *args_)  //(void *file_name_)
     thread_exit ();    
   }
 
-  else {
-    
-    int i,size;
-  
-    /* push the element of argv in reverse order */
-    for(i=(argc-1);i>=0;i--)
-    {
-      printf("\n\n %d \n\n", i);
-      size = (strlen(argv_ptr[i])+1) * (sizeof (char));
-      if_.esp -= size;
-        memcpy(if_.esp, argv_ptr[i], size);
-      argv_in_stack[i] = if_.esp;
-    }
-    
-    /* word-align */
-    i = 4 - ((PHYS_BASE - if_.esp) % 4);
-      if(i!=0)
-    {
-      if_.esp -= (i * sizeof (uint8_t));
-      memset(if_.esp, 0, (i * sizeof (uint8_t)));
-    }
-    
-    /* push address of argv */
-    char **argv_addr;
-    if_.esp -= (sizeof (char *));
-    memset(if_.esp, 0, (sizeof (char *)));
-    for(i=argc-1; i>=0; i--)
-    {
-      if_.esp -= (sizeof (char *));
-      memcpy(if_.esp, &argv_in_stack[i], (sizeof (char *)));
-      if(i==0)
-        argv_addr = if_.esp;
-    }
-    
-    /* push the start address of argv */
-    if_.esp -= (sizeof (char **));
-    memcpy(if_.esp, &argv_addr, (sizeof (char **)));
-    
-    /* push argc */
-    if_.esp -= (sizeof (int));
-    memcpy(if_.esp, &argc, (sizeof (int)));
-
-    /* push retrun address */
-    if_.esp -= (sizeof (void (*) ()));
-    memset(if_.esp, 0, (sizeof (void (*) ())));
-
-  }
-
   sema_up (&cur->sema_success);
   sema_down (&cur->sema_success);		/* sync with exec() */
+
+
+  /* tokenize the arguments */
+  for(token = strtok_r (file_name, " ", &save_ptr);
+    token != NULL ;
+    token = strtok_r (NULL, " ", &save_ptr), argc++)
+  {
+    argv_ptr[argc] = token;
+  }
+
+  int i,size;
+  
+  /* push the element of argv in reverse order */
+  for(i=(argc-1);i>=0;i--)
+  {
+    size = (strlen(argv_ptr[i])+1) * (sizeof (char));
+    if_.esp -= size;
+      memcpy(if_.esp, argv_ptr[i], size);
+    argv_in_stack[i] = if_.esp;
+  }
+    
+  /* word-align */
+  i = 4 - ((PHYS_BASE - if_.esp) % 4);
+  if(i!=0)
+  {
+    if_.esp -= (i * sizeof (uint8_t));
+    memset(if_.esp, 0, (i * sizeof (uint8_t)));
+  }
+    
+  /* push address of argv */
+  char **argv_addr;
+  if_.esp -= (sizeof (char *));
+  memset(if_.esp, 0, (sizeof (char *)));
+  for(i=argc-1; i>=0; i--)
+  {
+    if_.esp -= (sizeof (char *));
+    memcpy(if_.esp, &argv_in_stack[i], (sizeof (char *)));
+    if(i==0)
+      argv_addr = if_.esp;
+  }
+    
+  /* push the start address of argv */
+  if_.esp -= (sizeof (char **));
+  memcpy(if_.esp, &argv_addr, (sizeof (char **)));
+  
+  /* push argc */
+  if_.esp -= (sizeof (int));
+  memcpy(if_.esp, &argc, (sizeof (int)));
+
+  /* push retrun address */
+  if_.esp -= (sizeof (void (*) ()));
+  memset(if_.esp, 0, (sizeof (void (*) ())));
 
   palloc_free_page (file_name);
   /* Start the user process by simulating a return from an
