@@ -71,7 +71,7 @@ start_process (void *file_name)
   bool success;
 
   token = strtok_r (file_name, " ", &save_ptr); // get file name
-
+  
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -100,9 +100,9 @@ start_process (void *file_name)
 
 
   /* tokenize the arguments */
-  for(token = strtok_r (file_name, " ", &save_ptr);
-    token != NULL ;
-    token = strtok_r (NULL, " ", &save_ptr), argc++)
+  for(token = strtok_r (NULL, " ", &save_ptr);
+      token != NULL ;
+      token = strtok_r (NULL, " ", &save_ptr), argc++)
   {
     argv_ptr[argc] = token;
   }
