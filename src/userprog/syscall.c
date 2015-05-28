@@ -383,7 +383,7 @@ void get_arg (struct intr_frame *f, int *arg, int n)
   {
     ptr = (int *) f->esp + i;
     ptr_validate((const void *) ptr);
-    arg[i] = *ptr;
+    arg[i-1] = *ptr;
   }
 }
 
