@@ -502,9 +502,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->is_awake = true;
 
 #ifdef USERPROG
-  t->file_num = 1;
   list_init (&t->children);
-  list_init (&t->files);
   sema_init (&t->sema_wait,0);
   sema_init (&t->sema_success,0);
 #endif  
