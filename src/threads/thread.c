@@ -184,6 +184,11 @@ thread_create (const char *name, int priority,
   tid = t->tid = allocate_tid ();
   t->parent = thread_current ();
 
+  struct child *child = malloc(sizeof(struct child));
+  child->tid = tid;
+  child->exit = false;
+  list_push_back (&thread_current ()->children, &child->elem);
+
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
@@ -497,11 +502,9 @@ init_thread (struct thread *t, const char *name, int priority)
   t->is_awake = true;
 
 #ifdef USERPROG
-  t->parent = NULL;
-  t->exit = false;
-  t->isWaited = false;
-  t->exit_status = -1;
-  list_init (&t->children_status);
+  t->file_num = 1;
+  list_init (&t->children);
+  list_init (&t->files);
   sema_init (&t->sema_wait,0);
   sema_init (&t->sema_success,0);
 #endif  

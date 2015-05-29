@@ -85,13 +85,6 @@ typedef int tid_t;
    ready state is on the run queue, whereas only a thread in the
    blocked state is on a semaphore wait list. */
 
-struct exit_data
-{
-  int tid;
-  int status;
-  struct list_elem elem;
-};
-
 struct thread
   {
     /* Owned by thread.c. */
@@ -114,10 +107,11 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
     struct thread *parent;		/* Parent process. */
-    struct list children_status;		/* Exit status of children */ 
-    bool exit;				/* Whether this process already exit */ 
-    bool isWaited;			/* Whether this process is waited for by parent process */
+    struct list children;		/* List of child process */ 
+    struct file *file;			/* File pointer */
+    bool load_success;			/* Whether the child process has been loaded successfully */
     int exit_status;			/* Exit status of this process */
+    tid_t waiting_child;			/* Child that this process is waiting for */
     struct semaphore sema_wait;		/* Semaphore for handling process control */
     struct semaphore sema_success; 	/* Semaphore for handling the case where the load fails */
 #endif

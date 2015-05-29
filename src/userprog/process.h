@@ -8,4 +8,13 @@ int process_wait (tid_t);
 void process_exit (void);
 void process_activate (void);
 
+struct child
+{
+  tid_t tid;
+  int exit_status; 
+  bool exit; 		// whether this child process has already exited.
+  struct list_elem elem;
+}
+
+
 #endif /* userprog/process.h */

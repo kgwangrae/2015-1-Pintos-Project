@@ -33,8 +33,6 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
-
-  char *temp = malloc(sizeof(char)*(strlen(file_name)));
   char *fn;
   char *save_ptr;
 
@@ -44,16 +42,35 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
-  fn = strtok_r (file_name, " ", &save_ptr);
+ 
+  /* Get the process name */
+  fn = fn_copy+strlen(fn_copy)+1;
+  strlcpy (fn, file_name, strlen(file_name)+1);
+  fn = strtok_r (fn, " ", &save_ptr);
   
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (fn, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR){
     palloc_free_page (fn_copy);
-    printf("error");
+    return tid;
   }
-  free(temp);
-     
+    
+  /* Wait for the load */
+  sema_down (&thread_current ()->sema_success);
+ 
+  /* If the load fails, remove the child struct from the child list */
+  if (!thread_current ()->load_success)
+  {
+    struct child *child = get_child (thread_current (), tid);
+
+    if (child != NULL)
+    {
+      list_remove (&child->elem);
+      free (child);
+    }
+    return TID_ERROR;
+  } 
+ 
   return tid;
 }
 
@@ -61,16 +78,16 @@ process_execute (const char *file_name)
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *file_name) 
+start_process (void *file_name_) 
 {
   char *token, *save_ptr;
-  char *argv_ptr[50];
+  char *file_name = file_name_;
+  int max_arg = 50;
   int argc = 0;
 
   struct intr_frame if_;
   bool success;
 
-  token = strtok_r (file_name, " ", &save_ptr); // get file name
   
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -80,65 +97,41 @@ start_process (void *file_name)
  
   struct thread *cur = thread_current ();
   
-  success = load (token, &if_.eip, &if_.esp);
+  success = load (file_name, &if_.eip, &if_.esp);
 
-  char *argv_in_stack[50];
+  /* tokenize the arguments and push the element of argv*/
+  char **argv = malloc (max_arg * sizeof(char *));
 
-  /* If load failed, quit */
-  if (!success)
-  {
-    palloc_free_page (file_name);
-    cur->tid = -1;			
-    sema_up (&cur->sema_success);		/* sync with exec() */
-    sema_down (&cur->sema_success);
-    cur->exit_status = -1;
-    thread_exit ();    
-  }
-
-  sema_up (&cur->sema_success);
-  sema_down (&cur->sema_success);		/* sync with exec() */
-
-
-  /* tokenize the arguments */
-  for(token = strtok_r (NULL, " ", &save_ptr);
+  for(token = strtok_r (file_name, " ", &save_ptr);
       token != NULL ;
-      token = strtok_r (NULL, " ", &save_ptr), argc++)
+      token = strtok_r (NULL, " ", &save_ptr))
   {
-    argv_ptr[argc] = token;
+    if_.esp -= strlen (token) + 1;
+    memcpy (*esp, token, strlen(token) + 1);
+    argv[argc] = if_.esp;
+    argc++;
   }
 
-  int i,size;
-  
-  /* push the element of argv in reverse order */
-  for(i=(argc-1);i>=0;i--)
-  {
-    size = (strlen(argv_ptr[i])+1) * (sizeof (char));
-    if_.esp -= size;
-      memcpy(if_.esp, argv_ptr[i], size);
-    argv_in_stack[i] = if_.esp;
-  }
-    
+   
   /* word-align */
-  i = 4 - ((PHYS_BASE - if_.esp) % 4);
-  if(i!=0)
+  int i = 4 - ((PHYS_BASE - if_.esp) % 4);
+  if(i != 0)
   {
     if_.esp -= (i * sizeof (uint8_t));
     memset(if_.esp, 0, (i * sizeof (uint8_t)));
   }
     
   /* push address of argv */
-  char **argv_addr;
-  if_.esp -= (sizeof (char *));
-  memset(if_.esp, 0, (sizeof (char *)));
-  for(i=argc-1; i>=0; i--)
+  
+  argv[argc] = 0;
+  for(i=argc; i>=0; i--)
   {
     if_.esp -= (sizeof (char *));
-    memcpy(if_.esp, &argv_in_stack[i], (sizeof (char *)));
-    if(i==0)
-      argv_addr = if_.esp;
+    memcpy(if_.esp, &argv[i], (sizeof (char *)));
   }
     
   /* push the start address of argv */
+  char **argv_addr = if_.esp;
   if_.esp -= (sizeof (char **));
   memcpy(if_.esp, &argv_addr, (sizeof (char **)));
   
@@ -150,7 +143,21 @@ start_process (void *file_name)
   if_.esp -= (sizeof (void (*) ()));
   memset(if_.esp, 0, (sizeof (void (*) ())));
 
-  palloc_free_page (file_name);
+  free(argv);
+  palloc_free_page (file_name);  
+
+  /* If load failed, quit */
+  if (!success)
+  {
+    cur->exit_status = -1;			
+    cur->parent->load_success = false;
+    sema_up (&cur->parent->sema_success);	/* sync with exec() */
+    thread_exit ();    
+  }
+
+  cur->parent->load_success = true;
+  sema_up (&cur->parent->sema_success);		/* sync with exec() */
+
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -173,22 +180,31 @@ start_process (void *file_name)
 int
 process_wait (tid_t child_tid) 
 {
-  struct thread *t = get_thread (child_tid);
-  int status = -1;
+  int status;
+  struct thread *cur = thread_current ();
 
-  if (t == NULL)	/* If child_tid does not refer to a direct child of the calling process, return -1 */
-    return status;
-
-  if (t->status==THREAD_DYING || t->exit) 	/* If the child process already exited, return the saved exit status */
-  {
-    status = get_exit (thread_current (), child_tid);
-    return status;
-  }
-
-  t->isWaited = true;
-  sema_down (&t->parent->sema_wait);	/* Parent process waits for the exit of child process */ 
+  /*If thread has no child, return -1 */
+  if (list_empty (&cur->children))
+    return -1;
   
-  status = get_exit (thread_current (), child_tid);
+  struct child *child = get_child (child_tid, cur);
+
+  /* If child_tid does not refer to a child of the calling process, return -1 */
+  if (child == NULL)
+    return -1;
+
+  cur->waiting_child = child_tid;
+
+  /* If child is alive, parent process waits for the exit of child process */ 
+  if (!child->exit)
+    sema_down (&cur->sema_wait);
+  
+  /* After exit of child process */
+  status = child->exit_status;
+
+  /* Deallocate the memory of the child */
+  list_remove (&child->elem);
+  free (child);
 
   return status;
 }
@@ -199,6 +215,36 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+
+  printf("%s: exit(%d)\n", cur->name, cur->exit_status);	/* Print the process termination message. */
+
+  /* Close the executable file */
+  if (cur->file != NULL)
+    file_close (cur->file);
+
+  /* Close all files and deallocate the memory of file descriptors */
+  while (!list_empty (&cur->files))
+  {
+    struct list_elem *e = list_pop_front (&cur->files);
+    struct process_file *pf = list_entry (e, struct process_file, elem);
+    
+    file_close (pf->file);
+
+    list_remove (e);
+    free (pf);  
+  }
+
+
+  /* Deallocate the memory of children */
+  while (!list_empty (&cur->children))
+  {
+    struct list_elem *e = list_pop_front (&cur->children);
+    struct child *child = list_entry (e, struct child, elem);
+
+    list_remove (e);
+    free (child);
+  }  
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -212,24 +258,7 @@ process_exit (void)
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
-
-      printf("%s: exit(%d)\n", cur->name, cur->exit_status);	/* Print the process termination message. */
-  
-      return_exit (cur->parent, cur->tid, cur->exit_status);	/* Return the exit status of this process to its parent. */
-      cur->exit = true;
-
-      if (cur->parent!=NULL && cur->isWaited)		/* Notify the exit of this process to the waiting parent process. */ 
-      {
-        while (!list_empty (&cur->parent->sema_wait.waiters))
-	  sema_up (&cur->parent->sema_wait);           
-      }	
-
-      while (!list_empty (&cur->children_status))	/* Free the exit_data resources of this process. */
-      {
-        struct exit_data *exit = list_entry (list_pop_front (&cur->children_status), struct exit_data, elem);
-	free (exit);
-      }
-    
+   
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
@@ -334,6 +363,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
+  char *fn;
+  char *save_ptr;
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -342,7 +373,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  file = filesys_open (file_name);
+  fn = malloc (strlen (file_name) + 1);
+  strlcpy (fn, file_name, strlen (file_name)+1);
+  fn = strtok_r (fn, " ", &save_ptr);
+
+  file = filesys_open (fn);
+  free (fn);  
+
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -430,12 +467,18 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   success = true;
 
+  /* Deny writing to executable file */
+  file_deny_write (file)
+  cur->file = file;
+
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  if (!success)
+    file_close (file);
+  
   return success;
 }
-
+
 /* load() helpers. */
 
 static bool install_page (void *upage, void *kpage, bool writable);
@@ -584,33 +627,20 @@ install_page (void *upage, void *kpage, bool writable)
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
 
-/* Return the exit status of a child ot its parent. */
-void
-return_exit (struct thread *t, int tid, int status)
-{
-  struct exit_data *exit = (struct exit_data *) malloc (sizeof (struct exit_data));
-  exit->status = status;
-  exit->tid = tid;
-  list_push_back (&t->children_status,&exit->elem);
-}
-
-/* Get the exit status of the child which has given tid. */  
+/* Get the child which has given tid. */  
 int
-get_exit (struct thread *t, tid_t tid)
+get_child (struct thread *t, tid_t tid)
 {
   struct list_elem *e;
-  int status = -1;
   
-  for (e = list_begin (&t->children_status); e != list_end (&t->children_status); e = list_next (e))
+  for (e = list_begin (&t->children); e != list_end (&t->children); e = list_next (e))
   {
-    struct exit_data *exit = list_entry (e, struct exit_data, elem);
-    if (exit->tid == tid)
+    struct child *child = list_entry (e, struct child, elem);
+    if (child->tid == tid)
     {
-      status = exit->status;
-      exit->status = -1;	/* To prevent duplicate wait call */
-      break;
+      return child;
     }
   }
   
-  return status;
+  return NULL;
 }

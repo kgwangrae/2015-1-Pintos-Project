@@ -345,6 +345,21 @@ void exit (int status)
   struct thread *cur = thread_current ();
   
   cur->exit_status = status;
+
+  if (!list_empty (&cur->parent->children))
+  {
+    struct child *child = get_child (cur->tid, parent);
+   
+    if (child != NULL)
+    {
+      child->exit_status = status;
+      child->exit = true;
+
+      if (cur->parent->waiting_child == cur->tid)
+        sema_up (&cur->parent->sema_wait);    
+    }
+  }
+
   thread_exit ();
 }
 
@@ -353,8 +368,6 @@ pid_t exec (const char *file)
   pid_t pid = process_execute (file);
 
   struct thread *t = get_thread (pid);
-  sema_down (&t->sema_success);
-  sema_up (&t->sema_success);
 
   return t->tid;
 }
