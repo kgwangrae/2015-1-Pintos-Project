@@ -7,6 +7,7 @@
 #include <string.h>
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
+#include "userprog/syscall.h"
 #include "userprog/tss.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
@@ -224,17 +225,7 @@ process_exit (void)
     file_close (cur->file);
 
   /* Close all files and deallocate the memory of file descriptors */
-  while (!list_empty (&cur->files))
-  {
-    struct list_elem *e = list_pop_front (&cur->files);
-    struct process_file *pf = list_entry (e, struct process_file, elem);
-    
-    file_close (pf->file);
-
-    list_remove (e);
-    free (pf);  
-  }
-
+  pf_close_all ();
 
   /* Deallocate the memory of children */
   while (!list_empty (&cur->children))
@@ -468,7 +459,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   success = true;
 
   /* Deny writing to executable file */
-  file_deny_write (file)
+  file_deny_write (file);
   cur->file = file;
 
  done:
