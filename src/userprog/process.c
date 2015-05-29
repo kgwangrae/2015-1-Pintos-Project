@@ -223,8 +223,10 @@ process_exit (void)
   printf("%s: exit(%d)\n", cur->name, cur->exit_status);	/* Print the process termination message. */
 
   /* Close the executable file */
+  lock_acquire (&fs_lock);
   if (cur->file != NULL)
     file_close (cur->file);
+  lock_release (&fs_lock);
 
   /* Close all files and deallocate the memory of file descriptors */
   pf_close_all ();

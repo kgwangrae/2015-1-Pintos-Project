@@ -8,6 +8,7 @@
 
 #define SYSCALL_ERROR -1
 
+struct lock fs_lock; // filesys lock
 void syscall_init (void);
 
 /* Process identifier. */

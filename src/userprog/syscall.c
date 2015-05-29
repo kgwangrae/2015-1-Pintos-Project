@@ -13,7 +13,6 @@
 
 struct child* get_child (struct thread *t, tid_t tid);
 static void syscall_handler (struct intr_frame *);
-struct lock fs_lock;
 
 #define MAX_ARGS 3 // 3 args are enough for system calls.
 void get_arg (struct intr_frame *f, int *arg, int n);
@@ -366,7 +365,9 @@ void exit (int status)
 
 pid_t exec (const char *file)
 {
+  lock_acquire (&fs_lock);
   pid_t pid = process_execute (file);
+  lock_release (&fs_lock);
 
   struct thread *t = get_thread (pid);
 
