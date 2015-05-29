@@ -14,7 +14,6 @@ struct child
   int exit_status; 
   bool exit; 		// whether this child process has already exited.
   struct list_elem elem;
-}
-
+};
 
 #endif /* userprog/process.h */

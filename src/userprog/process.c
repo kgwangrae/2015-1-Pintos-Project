@@ -1,4 +1,5 @@
 #include "userprog/process.h"
+#include "userprog/syscall.h"
 #include <debug.h>
 #include <inttypes.h>
 #include <round.h>
@@ -23,6 +24,7 @@ static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 void return_exit (struct thread *t, int tid, int status);
 int get_exit (struct thread *t, tid_t tid);
+struct child* get_child (struct thread *t, tid_t tid);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -107,7 +109,7 @@ start_process (void *file_name_)
       token = strtok_r (NULL, " ", &save_ptr))
   {
     if_.esp -= strlen (token) + 1;
-    memcpy (*esp, token, strlen(token) + 1);
+    memcpy (if_.esp, token, strlen(token) + 1);
     argv[argc] = if_.esp;
     argc++;
   }
@@ -187,7 +189,7 @@ process_wait (tid_t child_tid)
   if (list_empty (&cur->children))
     return -1;
   
-  struct child *child = get_child (child_tid, cur);
+  struct child *child = get_child (cur, child_tid);
 
   /* If child_tid does not refer to a child of the calling process, return -1 */
   if (child == NULL)
@@ -223,18 +225,7 @@ process_exit (void)
   if (cur->file != NULL)
     file_close (cur->file);
 
-  /* Close all files and deallocate the memory of file descriptors */
-  while (!list_empty (&cur->files))
-  {
-    struct list_elem *e = list_pop_front (&cur->files);
-    struct process_file *pf = list_entry (e, struct process_file, elem);
-    
-    file_close (pf->file);
-
-    list_remove (e);
-    free (pf);  
-  }
-
+  pf_close_all (); /*from syscall.h*/ 
 
   /* Deallocate the memory of children */
   while (!list_empty (&cur->children))
@@ -468,8 +459,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   success = true;
 
   /* Deny writing to executable file */
-  file_deny_write (file)
-  cur->file = file;
+  file_deny_write (file);
+  thread_current()->file = file;
 
  done:
   /* We arrive here whether the load is successful or not. */
@@ -628,7 +619,7 @@ install_page (void *upage, void *kpage, bool writable)
 }
 
 /* Get the child which has given tid. */  
-int
+struct child*
 get_child (struct thread *t, tid_t tid)
 {
   struct list_elem *e;
