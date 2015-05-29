@@ -8,6 +8,7 @@
 #include <string.h>
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
+#include "userprog/syscall.h"
 #include "userprog/tss.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
@@ -225,7 +226,8 @@ process_exit (void)
   if (cur->file != NULL)
     file_close (cur->file);
 
-  pf_close_all (); /*from syscall.h*/ 
+  /* Close all files and deallocate the memory of file descriptors */
+  pf_close_all ();
 
   /* Deallocate the memory of children */
   while (!list_empty (&cur->children))
