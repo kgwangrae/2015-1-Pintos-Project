@@ -11,6 +11,7 @@
 #include "devices/input.h"
 #include "filesys/filesys.h"
 
+struct child* get_child (struct thread *t, tid_t tid);
 static void syscall_handler (struct intr_frame *);
 struct lock fs_lock;
 
@@ -348,7 +349,7 @@ void exit (int status)
 
   if (!list_empty (&cur->parent->children))
   {
-    struct child *child = get_child (cur->tid, parent);
+    struct child *child = get_child (cur->parent, cur->tid);
    
     if (child != NULL)
     {
