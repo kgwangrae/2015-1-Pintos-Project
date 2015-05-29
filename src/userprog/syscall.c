@@ -18,7 +18,7 @@ struct lock fs_lock;
 #define MAX_ARGS 3 // 3 args are enough for system calls.
 void get_arg (struct intr_frame *f, int *arg, int n);
 
-#define UADDR_BASE (const void *) 0x08084000
+#define UADDR_BASE (const void *) 0x08048000
 int ptr_user_to_kernel(const void *vaddr);
 void ptr_validate (const void *vaddr);
 void buf_validate (const void *buf, unsigned size);
@@ -414,7 +414,8 @@ int ptr_user_to_kernel(const void *vaddr)
  */
 void ptr_validate (const void *vaddr)
 {
-  if (!is_user_vaddr(vaddr) || vaddr < UADDR_BASE) exit(SYSCALL_ERROR);
+  if (is_user_vaddr(vaddr) && vaddr >= UADDR_BASE) {}
+  else exit(SYSCALL_ERROR);
 }
 
 /* Prevents buffer overflow. 
