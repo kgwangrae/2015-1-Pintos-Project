@@ -655,29 +655,6 @@ priority_cmp (const struct list_elem *a, const struct list_elem *b, void *aux)
  return ta->priority > tb->priority;
 }
 
-/* Get thread from tid */
-struct thread *
-get_thread (tid_t tid)
-{
-  enum intr_level old_level;
-  old_level = intr_disable();
-  struct list_elem *e;
-
-  for (e = list_begin (&all_list); e != list_end (&all_list); e = list_next (e))
-  {
-    struct thread *t = list_entry (e, struct thread, allelem);
-  
-    if (t->tid == tid)
-    {
-      intr_set_level (old_level);
-      return t;
-    }
-  }
-  
-  intr_set_level (old_level);
-  return NULL;
-}
-
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);

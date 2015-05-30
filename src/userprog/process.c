@@ -98,9 +98,21 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
  
-  struct thread *cur = thread_current ();
-  
   success = load (file_name, &if_.eip, &if_.esp);
+
+  struct thread *cur = thread_current ();
+
+  /* If load failed, quit */
+  if (!success)
+  {
+    cur->exit_status = -1;			
+    cur->parent->load_success = false;
+    sema_up (&cur->parent->sema_success);	/* sync with exec() */
+    thread_exit ();    
+  }
+
+  cur->parent->load_success = true;
+  sema_up (&cur->parent->sema_success);		/* sync with exec() */
 
   /* tokenize the arguments and push the element of argv*/
   char **argv = malloc (max_arg * sizeof(char *));
@@ -148,18 +160,6 @@ start_process (void *file_name_)
 
   free(argv);
   palloc_free_page (file_name);  
-
-  /* If load failed, quit */
-  if (!success)
-  {
-    cur->exit_status = -1;			
-    cur->parent->load_success = false;
-    sema_up (&cur->parent->sema_success);	/* sync with exec() */
-    thread_exit ();    
-  }
-
-  cur->parent->load_success = true;
-  sema_up (&cur->parent->sema_success);		/* sync with exec() */
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in

@@ -369,9 +369,7 @@ pid_t exec (const char *file)
   pid_t pid = process_execute (file);
   lock_release (&fs_lock);
 
-  struct thread *t = get_thread (pid);
-
-  return t->tid;
+  return pid;
 }
 
 int wait (pid_t pid)
