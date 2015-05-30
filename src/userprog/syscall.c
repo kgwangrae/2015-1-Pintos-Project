@@ -413,8 +413,12 @@ int ptr_user_to_kernel(const void *vaddr)
  */
 void ptr_validate (const void *vaddr)
 {
-  if (is_user_vaddr(vaddr) && vaddr >= UADDR_BASE) {}
-  else exit(SYSCALL_ERROR);
+  if (!is_user_vaddr(vaddr)) goto err;
+  if (vaddr < UADDR_BASE) goto err;
+  if (pagedir_get_page(thread_current()->pagedir, vaddr) == NULL) goto err;
+  return;
+err:
+  exit(SYSCALL_ERROR);
 }
 
 /* Prevents buffer overflow. 
