@@ -197,10 +197,6 @@ process_wait (tid_t child_tid)
   if (child == NULL)
     return -1;
 
-  /* If this process has already called wait on child_tid, return -1 */  
-  if (cur->waiting_child == child_tid)
-    return -1;
-
   cur->waiting_child = child_tid;
 
   /* If child is alive, parent process waits for the exit of child process */ 
