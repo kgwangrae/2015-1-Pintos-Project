@@ -105,6 +105,7 @@ start_process (void *file_name_)
   /* If load failed, quit */
   if (!success)
   {
+    palloc_free_page (file_name);
     cur->exit_status = -1;			
     cur->parent->load_success = false;
     sema_up (&cur->parent->sema_success);	/* sync with exec() */
@@ -196,6 +197,10 @@ process_wait (tid_t child_tid)
   if (child == NULL)
     return -1;
 
+  /* If this process has already called wait on child_tid, return -1 */  
+  if (cur->waiting_child == child_tid)
+    return -1;
+
   cur->waiting_child = child_tid;
 
   /* If child is alive, parent process waits for the exit of child process */ 
@@ -228,9 +233,6 @@ process_exit (void)
     file_close (cur->file);
   lock_release (&fs_lock);
 
-  /* Close all files and deallocate the memory of file descriptors */
-  pf_close_all ();
-
   /* Deallocate the memory of children */
   while (!list_empty (&cur->children))
   {
@@ -240,6 +242,9 @@ process_exit (void)
     list_remove (e);
     free (child);
   }  
+
+  /* Close all files and deallocate the memory of file descriptors */
+  pf_close_all ();
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
