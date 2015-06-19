@@ -101,3 +101,71 @@ do_format (void)
   free_map_close ();
   printf ("done.\n");
 }
+
+static dir* get_final_dir (const char* path)
+{
+    int path_length = strlen(path);
+    struct dir* dir;
+
+    if(path_length == 0 || thread_current()->dir == NULL)
+        return NULL;
+
+    char path_copy[path_length+1];
+    memcpy(s, path, path_length+1);
+
+    if(path_copy[0] == '/')
+        dir = dir_open_root();
+    else
+        dir = dir_reopen(thread_current()->dir);
+
+    char *save_ptr, *next = NULL, *token = strtok_r(path_copy, "/", &save_ptr);
+
+    if (token)
+        next = strtok_r(NULL, "/", &save_ptr);
+
+    while(true)
+    {
+        if(next == NULL)
+            break;
+
+        if(strcmp(token, ".") != 0)
+        {
+            struct inode *inode;
+            
+            if(strcmp(token, "..") == 0)
+            {
+                if(!dir_get_parent(dir, &inode))
+                    return NULL;
+             }
+            else
+            {
+                if (!dir_lookup(dir, token, &inode))
+                    return NULL;
+            }
+            if(inode->isdir)
+            {
+                dir_close(dir);
+                dir = dir_open(inode);
+            }
+            else
+                inode_close(inode):
+
+        }
+        token = next;
+        next = strtok_r(NULL, "/", &save_ptr);
+    }
+        return dir;
+}
+
+char* get_filename (const char* path)
+{
+    if(path==NULL || strlen(path)==0)
+        return NULL;
+
+    char *ptr_to_slash = strrchr(path, '/');
+
+    if(ptr_to_slash == NULL)
+        return path;
+    else
+        return ptr_to_slash+1;
+}
