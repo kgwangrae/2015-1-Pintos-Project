@@ -128,7 +128,7 @@ struct thread
     int fd_avail;                       /* Next available file descriptor. */
     struct list files;                  /* List of open files */
 
-    struct *dir = dir;
+    struct dir *dir;
 
   };
 

@@ -6,9 +6,12 @@
 #include "filesys/free-map.h"
 #include "filesys/inode.h"
 #include "filesys/directory.h"
+#include "threads/thread.h"
 
 /* Partition that contains the file system. */
 struct block *fs_device;
+struct dir* get_final_dir(const char* path);
+char* get_filename(const char* path);
 
 static void do_format (void);
 
@@ -102,7 +105,7 @@ do_format (void)
   printf ("done.\n");
 }
 
-static dir* get_final_dir (const char* path)
+struct dir* get_final_dir (const char* path)
 {
     int path_length = strlen(path);
     struct dir* dir;
@@ -111,7 +114,7 @@ static dir* get_final_dir (const char* path)
         return NULL;
 
     char path_copy[path_length+1];
-    memcpy(s, path, path_length+1);
+    memcpy(path_copy, path, path_length+1);
 
     if(path_copy[0] == '/')
         dir = dir_open_root();
@@ -148,7 +151,7 @@ static dir* get_final_dir (const char* path)
                 dir = dir_open(inode);
             }
             else
-                inode_close(inode):
+                inode_close(inode);
 
         }
         token = next;
