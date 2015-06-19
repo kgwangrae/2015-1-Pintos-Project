@@ -143,7 +143,10 @@ struct dir* get_final_dir (const char* path)
             else
             {
                 if (!dir_lookup(dir, token, &inode))
+                {
+                    dir_close(dir);
                     return NULL;
+                }
             }
             if(inode->isdir)
             {
@@ -168,7 +171,7 @@ char* get_filename (const char* path)
     char *ptr_to_slash = strrchr(path, '/');
 
     if(ptr_to_slash == NULL)
-        return path;
+        return (char*) path;
     else
         return ptr_to_slash+1;
 }
