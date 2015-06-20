@@ -223,6 +223,9 @@ process_exit (void)
 
   printf("%s: exit(%d)\n", cur->name, cur->exit_status);	/* Print the process termination message. */
 
+  /* Close the working directory */
+  dir_close (cur->dir);
+  
   /* Close the executable file */
   lock_acquire (&fs_lock);
   if (cur->file != NULL)
@@ -453,6 +456,12 @@ load (const char *file_name, void (**eip) (void), void **esp)
           break;
         }
     }
+
+  /* Set up working directory */
+  if (thread_current ()->dir)
+    t->dir = dir_reopen (thread_current ()->dir);
+  else 
+    t->dir = dir_open_root ();
 
   /* Set up stack. */
   if (!setup_stack (esp))

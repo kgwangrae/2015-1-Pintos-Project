@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <debug.h>
 #include "filesys/file.h"
+#include "filesys/directory.h"
 #include "threads/thread.h"
 
 #define SYSCALL_ERROR -1
@@ -42,12 +43,18 @@ int write (int fd, const void *buffer, unsigned length);
 void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
+bool chdir (const char *dir);
+bool mkdir (const char *dir);
+bool readdir (int fd, char *name);
+bool isdir (int fd);
+int inumber (int fd);
 
 /* Process file definitions */ 
 
 struct process_file 
 {
   struct file *file;
+  struct dir *dir;
   int fd;
   struct list_elem elem;
 };
