@@ -94,7 +94,7 @@ off_t dinode_extend (struct inode_disk *dinode, off_t new_length)
   size_t new_data_sectors = bytes_to_total_sectors(new_length) - bytes_to_total_sectors(dinode->length);
 
   /* Contraction not allowed */
-  if (new_data_sectors <= 0) return new_length; 
+  if (new_data_sectors <= 0) return dinode->length; 
 
   /* Extension to direct block */
   while (dinode->dir_cnt < DIR_BLOCKS)
@@ -187,10 +187,12 @@ off_t dinode_extend (struct inode_disk *dinode, off_t new_length)
   }
   
   /* Immediately write back because there's no buffer cache. */
+  dinode->length = new_length - new_data_sectors*BLOCK_SECTOR_SIZE;
   block_write (fs_device, dinode->sector, dinode);
   return new_length - new_data_sectors*BLOCK_SECTOR_SIZE;
   
 done:
+  dinode->length = new_length;
   block_write (fs_device, dinode->sector, dinode);
   return new_length;
 }
