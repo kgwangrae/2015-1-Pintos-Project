@@ -92,7 +92,7 @@ filesys_remove (const char *name)
 
   return success;
 }
-
+
 /* Formats the file system. */
 static void
 do_format (void)
@@ -137,9 +137,10 @@ struct dir* get_final_dir (const char* path)
             
             if(strcmp(token, "..") == 0)
             {
-                if(!dir_get_parent(dir, &inode))
-                    return NULL;
-             }
+                //TODO : not working.
+                //if(!dir_get_parent(dir, &inode))
+                //    return NULL;
+            }
             else
             {
                 if (!dir_lookup(dir, token, &inode))
@@ -148,7 +149,7 @@ struct dir* get_final_dir (const char* path)
                     return NULL;
                 }
             }
-            if(inode->isdir)
+            if(inode->data.isdir)
             {
                 dir_close(dir);
                 dir = dir_open(inode);
