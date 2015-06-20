@@ -6,9 +6,12 @@
 #include "filesys/free-map.h"
 #include "filesys/inode.h"
 #include "filesys/directory.h"
+#include "threads/thread.h"
 
 /* Partition that contains the file system. */
 struct block *fs_device;
+struct dir* get_final_dir(const char* path);
+char* get_filename(const char* path);
 
 static void do_format (void);
 
@@ -100,4 +103,75 @@ do_format (void)
     PANIC ("root directory creation failed");
   free_map_close ();
   printf ("done.\n");
+}
+
+struct dir* get_final_dir (const char* path)
+{
+    int path_length = strlen(path);
+    struct dir* dir;
+
+    if(path_length == 0 || thread_current()->dir == NULL)
+        return NULL;
+
+    char path_copy[path_length+1];
+    memcpy(path_copy, path, path_length+1);
+
+    if(path_copy[0] == '/')
+        dir = dir_open_root();
+    else
+        dir = dir_reopen(thread_current()->dir);
+
+    char *save_ptr, *next = NULL, *token = strtok_r(path_copy, "/", &save_ptr);
+
+    if (token)
+        next = strtok_r(NULL, "/", &save_ptr);
+
+    while(true)
+    {
+        if(next == NULL)
+            break;
+
+        if(strcmp(token, ".") != 0)
+        {
+            struct inode *inode;
+            
+            if(strcmp(token, "..") == 0)
+            {
+                if(!dir_get_parent(dir, &inode))
+                    return NULL;
+             }
+            else
+            {
+                if (!dir_lookup(dir, token, &inode))
+                {
+                    dir_close(dir);
+                    return NULL;
+                }
+            }
+            if(inode->isdir)
+            {
+                dir_close(dir);
+                dir = dir_open(inode);
+            }
+            else
+                inode_close(inode);
+
+        }
+        token = next;
+        next = strtok_r(NULL, "/", &save_ptr);
+    }
+        return dir;
+}
+
+char* get_filename (const char* path)
+{
+    if(path==NULL || strlen(path)==0)
+        return NULL;
+
+    char *ptr_to_slash = strrchr(path, '/');
+
+    if(ptr_to_slash == NULL)
+        return (char*) path;
+    else
+        return ptr_to_slash+1;
 }

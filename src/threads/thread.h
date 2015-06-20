@@ -127,6 +127,9 @@ struct thread
     /* For file management */
     int fd_avail;                       /* Next available file descriptor. */
     struct list files;                  /* List of open files */
+
+    struct dir *dir;
+
   };
 
 /* If false (default), use round-robin scheduler.

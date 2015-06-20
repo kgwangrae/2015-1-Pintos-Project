@@ -507,6 +507,10 @@ init_thread (struct thread *t, const char *name, int priority)
   sema_init (&t->sema_success,0);
 #endif  
 
+#ifdef FILESYS
+  t->dir = NULL;
+#endif
+
   old_level = intr_disable ();
   
   list_push_back (&all_list, &t->allelem);
