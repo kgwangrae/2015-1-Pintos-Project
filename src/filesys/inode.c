@@ -94,7 +94,7 @@ off_t dinode_extend (struct inode_disk *dinode, off_t new_length)
   size_t new_data_sectors = bytes_to_total_sectors(new_length) - bytes_to_total_sectors(dinode->length);
 
   /* Contraction not allowed */
-  if (new_data_sectors <= 0) return new_length; 
+  if (new_data_sectors <= 0) return dinode->length; 
 
   /* Extension to direct block */
   while (dinode->dir_cnt < DIR_BLOCKS)
@@ -187,10 +187,12 @@ off_t dinode_extend (struct inode_disk *dinode, off_t new_length)
   }
   
   /* Immediately write back because there's no buffer cache. */
+  dinode->length = new_length - new_data_sectors*BLOCK_SECTOR_SIZE;
   block_write (fs_device, dinode->sector, dinode);
   return new_length - new_data_sectors*BLOCK_SECTOR_SIZE;
   
 done:
+  dinode->length = new_length;
   block_write (fs_device, dinode->sector, dinode);
   return new_length;
 }
@@ -257,7 +259,7 @@ void dinode_free (struct inode_disk *dinode)
  * to sector SECTOR on the file system device. 
  * Returns true if successful. Returns false if any allocation fails. */
 bool
-inode_create (block_sector_t sector, off_t length)
+inode_create (block_sector_t sector, off_t length, bool isdir)
 {
   struct inode_disk *disk_inode = NULL;
   bool success = false;
@@ -273,8 +275,7 @@ inode_create (block_sector_t sector, off_t length)
   {
     disk_inode->magic = INODE_MAGIC;
     disk_inode->sector = sector;
-    //TODO
-    disk_inode->isdir = false;
+    disk_inode->isdir = isdir;
 
     if (length == dinode_extend (disk_inode, length)) success = true;
 
@@ -526,4 +527,25 @@ off_t
 inode_length (const struct inode *inode)
 {
   return inode->data.length;
+}
+
+/* Returns whether inode is directory or not */
+bool
+inode_is_dir (struct inode *inode)
+{
+  return inode->data.isdir;
+}
+
+/* Returns whether inode is removed or not */
+bool
+inode_is_removed (struct inode *inode)
+{
+  return inode->removed;
+}
+
+/* Returns the sector number of inode */
+int
+inode_number (struct inode *inode)
+{
+  return (int) inode->sector;
 }

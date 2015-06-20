@@ -2,16 +2,16 @@
 #include <debug.h>
 #include <stdio.h>
 #include <string.h>
+#include <list.h>
 #include "filesys/file.h"
 #include "filesys/free-map.h"
 #include "filesys/inode.h"
 #include "filesys/directory.h"
 #include "threads/thread.h"
+#include "threads/malloc.h"
 
 /* Partition that contains the file system. */
 struct block *fs_device;
-struct dir* get_final_dir(const char* path);
-char* get_filename(const char* path);
 
 static void do_format (void);
 
@@ -49,11 +49,12 @@ bool
 filesys_create (const char *name, off_t initial_size) 
 {
   block_sector_t inode_sector = 0;
-  struct dir *dir = dir_open_root ();
+  struct dir *dir = get_dir (name, false);
+  char *filename = get_filename (name);
   bool success = (dir != NULL
                   && free_map_allocate (1, &inode_sector)
-                  && inode_create (inode_sector, initial_size)
-                  && dir_add (dir, name, inode_sector));
+                  && inode_create (inode_sector, initial_size, false)
+                  && dir_add (dir, filename, inode_sector));
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
   dir_close (dir);
@@ -69,12 +70,27 @@ filesys_create (const char *name, off_t initial_size)
 struct file *
 filesys_open (const char *name)
 {
-  struct dir *dir = dir_open_root ();
-  struct inode *inode = NULL;
+  if (*name == '\0') // empty root
+    return NULL;
 
-  if (dir != NULL)
-    dir_lookup (dir, name, &inode);
-  dir_close (dir);
+  struct dir *dir = get_dir (name, false);
+  
+  if (dir == NULL)
+    return NULL; 
+
+  struct inode *inode = NULL;
+  char *filename = get_filename (name); 
+ 
+  if (*filename == '\0') // when given name refers to a directory
+    inode = dir_get_inode (dir); 
+  else // when given name refers to a file
+  {
+    dir_lookup (dir, filename, &inode);
+    dir_close (dir);
+  }
+
+  if (inode == NULL || inode_is_removed (inode))
+    return NULL;
 
   return file_open (inode);
 }
@@ -86,8 +102,9 @@ filesys_open (const char *name)
 bool
 filesys_remove (const char *name) 
 {
-  struct dir *dir = dir_open_root ();
-  bool success = dir != NULL && dir_remove (dir, name);
+  struct dir *dir = get_dir (name, false);
+  char *filename = get_filename (name);
+  bool success = dir != NULL && dir_remove (dir, filename);
   dir_close (dir); 
 
   return success;
@@ -99,80 +116,78 @@ do_format (void)
 {
   printf ("Formatting file system...");
   free_map_create ();
-  if (!dir_create (ROOT_DIR_SECTOR, 16))
+  if (!dir_create (ROOT_DIR_SECTOR, 16, NULL))
     PANIC ("root directory creation failed");
   free_map_close ();
   printf ("done.\n");
 }
 
-struct dir* get_final_dir (const char* path)
+/* Open and returns the directory for given path */
+struct dir* get_dir (const char* path, bool include_last_token)
 {
-    int path_length = strlen(path);
-    struct dir* dir;
+    struct dir *dir;
+    char *path_copy = (char *) malloc (strlen(path) + 1);
+    strlcpy (path_copy, path, strlen(path) + 1); 
 
-    if(path_length == 0 || thread_current()->dir == NULL)
-        return NULL;
-
-    char path_copy[path_length+1];
-    memcpy(path_copy, path, path_length+1);
-
-    if(path_copy[0] == '/')
-        dir = dir_open_root();
-    else
+    if (path_copy[0] != '/') // relative path
+    {
+      if (thread_current()->dir)
         dir = dir_reopen(thread_current()->dir);
-
+      else
+        dir = dir_open_root ();
+    }
+    else // absolute path
+    {
+      dir = dir_open_root ();
+      path_copy++;
+    }
+    
     char *save_ptr, *next = NULL, *token = strtok_r(path_copy, "/", &save_ptr);
 
     if (token)
-        next = strtok_r(NULL, "/", &save_ptr);
+      next = strtok_r(NULL, "/", &save_ptr);
 
-    while(true)
+    while (true)
     {
-        if(next == NULL)
-            break;
+      if (next==NULL && !include_last_token) // ignore the last token for all case except chdir
+        break;
 
-        if(strcmp(token, ".") != 0)
+      struct inode *inode;
+ 
+      if (token != NULL)
+      {      
+        if (!dir_lookup(dir, token, &inode))
         {
-            struct inode *inode;
-            
-            if(strcmp(token, "..") == 0)
-            {
-                //TODO : not working.
-                //if(!dir_get_parent(dir, &inode))
-                //    return NULL;
-            }
-            else
-            {
-                if (!dir_lookup(dir, token, &inode))
-                {
-                    dir_close(dir);
-                    return NULL;
-                }
-            }
-            if(inode->data.isdir)
-            {
-                dir_close(dir);
-                dir = dir_open(inode);
-            }
-            else
-                inode_close(inode);
-
+          dir_close (dir);
+          free (path_copy);        
+          return NULL;
         }
-        token = next;
-        next = strtok_r(NULL, "/", &save_ptr);
+        
+        dir_close (dir);
+        dir = dir_open (inode);
+      }
+       
+      if (next == NULL)
+        break;
+
+      token = next;
+      next = strtok_r(NULL, "/", &save_ptr);
     }
-        return dir;
+    free (path_copy);
+   
+    if (inode_is_removed (dir->inode))
+      return NULL;
+ 
+    return dir;
 }
 
+/* returns the file name for given path */
 char* get_filename (const char* path)
 {
     if(path==NULL || strlen(path)==0)
         return NULL;
 
-    char *ptr_to_slash = strrchr(path, '/');
+    char *slash = strrchr(path, '/');
 
-    if(ptr_to_slash == NULL)
-        return (char*) path;
-    else
-        return ptr_to_slash+1;
+    return slash+1;
 }
