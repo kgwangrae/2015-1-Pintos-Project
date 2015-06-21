@@ -1,0 +1,59 @@
+SUMMARY BY TEST SET
+
+Test Set                                      Pts Max  % Ttl  % Max
+--------------------------------------------- --- --- ------ ------
+tests/filesys/extended/Rubric.functionality    34/ 34  30.0%/ 30.0%
+tests/filesys/extended/Rubric.robustness        8/ 10  12.0%/ 15.0%
+tests/filesys/extended/Rubric.persistence      19/ 23  16.5%/ 20.0%
+tests/filesys/base/Rubric                      30/ 30  20.0%/ 20.0%
+tests/userprog/Rubric.functionality           108/108  10.0%/ 10.0%
+tests/userprog/Rubric.robustness               88/ 88   5.0%/  5.0%
+--------------------------------------------- --- --- ------ ------
+Total                                                  93.5%/100.0%
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+SUMMARY OF INDIVIDUAL TESTS
+
+Robustness of file system (tests/filesys/extended/Rubric.robustness):
+** 0/ 1 tests/filesys/extended/dir-empty-name
+** 0/ 1 tests/filesys/extended/dir-open
+1/ 1 tests/filesys/extended/dir-over-file
+1/ 1 tests/filesys/extended/dir-under-file
+
+3/ 3 tests/filesys/extended/dir-rm-cwd
+2/ 2 tests/filesys/extended/dir-rm-parent
+1/ 1 tests/filesys/extended/dir-rm-root
+
+- Section summary.
+5/  7 tests passed
+8/ 10 points subtotal
+
+Persistence of file system (tests/filesys/extended/Rubric.persistence):
+** 0/ 1 tests/filesys/extended/dir-empty-name-persistence
+** 0/ 1 tests/filesys/extended/dir-mk-tree-persistence
+1/ 1 tests/filesys/extended/dir-mkdir-persistence
+** 0/ 1 tests/filesys/extended/dir-open-persistence
+1/ 1 tests/filesys/extended/dir-over-file-persistence
+1/ 1 tests/filesys/extended/dir-rm-cwd-persistence
+1/ 1 tests/filesys/extended/dir-rm-parent-persistence
+1/ 1 tests/filesys/extended/dir-rm-root-persistence
+1/ 1 tests/filesys/extended/dir-rm-tree-persistence
+1/ 1 tests/filesys/extended/dir-rmdir-persistence
+1/ 1 tests/filesys/extended/dir-under-file-persistence
+** 0/ 1 tests/filesys/extended/dir-vine-persistence
+1/ 1 tests/filesys/extended/grow-create-persistence
+1/ 1 tests/filesys/extended/grow-dir-lg-persistence
+1/ 1 tests/filesys/extended/grow-file-size-persistence
+1/ 1 tests/filesys/extended/grow-root-lg-persistence
+1/ 1 tests/filesys/extended/grow-root-sm-persistence
+1/ 1 tests/filesys/extended/grow-seq-lg-persistence
+1/ 1 tests/filesys/extended/grow-seq-sm-persistence
+1/ 1 tests/filesys/extended/grow-sparse-persistence
+1/ 1 tests/filesys/extended/grow-tell-persistence
+1/ 1 tests/filesys/extended/grow-two-files-persistence
+1/ 1 tests/filesys/extended/syn-rw-persistence
+
+- Section summary.
+19/ 23 tests passed
+19/ 23 points subtotal
