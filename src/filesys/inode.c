@@ -94,7 +94,11 @@ off_t dinode_extend (struct inode_disk *dinode, off_t new_length)
   size_t new_data_sectors = bytes_to_total_sectors(new_length) - bytes_to_total_sectors(dinode->length);
 
   /* Contraction not allowed */
-  if (new_data_sectors <= 0) return dinode->length; 
+  if (new_data_sectors <= 0) 
+  {
+    new_length = dinode->length;
+    goto done; 
+  }
 
   /* Extension to direct block */
   while (dinode->dir_cnt < DIR_BLOCKS)
