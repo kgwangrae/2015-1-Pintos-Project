@@ -127,8 +127,9 @@ do_format (void)
 struct dir* get_dir (const char* path, bool include_last_token)
 {
     struct dir *dir;
-    char *path_copy = (char *) malloc (strlen(path) + 1);
-    strlcpy (path_copy, path, strlen(path) + 1); 
+    char path_copy[strlen(path) + 1];
+    memcpy (path_copy, path, strlen(path) + 1); 
+    char *path_ptr = path_copy;
 
     if (path_copy[0] != '/') // relative path
     {
@@ -140,10 +141,10 @@ struct dir* get_dir (const char* path, bool include_last_token)
     else // absolute path
     {
       dir = dir_open_root ();
-      path_copy++;
+      path_ptr++;
     }
     
-    char *save_ptr, *next = NULL, *token = strtok_r(path_copy, "/", &save_ptr);
+    char *save_ptr, *next = NULL, *token = strtok_r(path_ptr, "/", &save_ptr);
 
     if (token)
       next = strtok_r(NULL, "/", &save_ptr);
@@ -160,7 +161,6 @@ struct dir* get_dir (const char* path, bool include_last_token)
         if (!dir_lookup(dir, token, &inode))
         {
           dir_close (dir);
-          free (path_copy);        
           return NULL;
         }
         
@@ -174,7 +174,6 @@ struct dir* get_dir (const char* path, bool include_last_token)
       token = next;
       next = strtok_r(NULL, "/", &save_ptr);
     }
-    free (path_copy);
    
     if (inode_is_removed (dir->inode))
       return NULL;
