@@ -190,9 +190,10 @@ off_t dinode_extend (struct inode_disk *dinode, off_t new_length)
   }
   
   /* Immediately write back because there's no buffer cache. */
+  /* This failure may happen when the given file size exceeds the maximum. */
   dinode->length = new_length - new_data_sectors*BLOCK_SECTOR_SIZE;
   block_write (fs_device, dinode->sector, dinode);
-  return new_length - new_data_sectors*BLOCK_SECTOR_SIZE;
+  return dinode->length;
   
 done:
   dinode->length = new_length;

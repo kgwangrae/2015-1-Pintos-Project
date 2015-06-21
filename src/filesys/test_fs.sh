@@ -7,8 +7,8 @@ echo "- Results are saved in fs_result directory.\n\n\n"
 mkdir fs_result
 cd fs_result
 
-array_succ='dir-mkdir dir-rmdir dir-vine grow-create grow-seq-sm grow-sparse'
-array_fail='dir-mk-tree dir-rm-tree grow-seq-lg grow-two-files grow-tell grow-file-size grow-dir-lg grow-root-sm grow-root-lg syn-rw'
+array_succ='dir-mk-tree dir-rm-tree dir-mkdir dir-rmdir dir-vine grow-create grow-seq-sm grow-sparse grow-tell grow-file-size grow-dir-lg grow-root-sm grow-root-lg syn-rw'
+array_fail='grow-seq-lg grow-two-files'
 
 for value in $array_fail
 do

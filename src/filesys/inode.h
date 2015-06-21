@@ -10,8 +10,8 @@ struct bitmap;
 
 /* Size Attributes */
 #define DIR_BLOCKS 12
-#define INDIR_BLOCKS 1
-#define DINDIR_BLOCKS 1
+#define INDIR_BLOCKS 4
+#define DINDIR_BLOCKS 4
 
 /* 4 bytes pointers on a 512 bytes sector */
 #define INDIR_BLOCK_PTRS 128
@@ -35,7 +35,7 @@ struct inode_disk
     off_t dindir_lv2_curr_usage;
     block_sector_t dindirect[DINDIR_BLOCKS]; /* Double indirect */
     
-    uint32_t unused[104];               /* Not used. */
+    uint32_t unused[98];               /* Not used. */
   };
 
 /* In-memory inode. */
