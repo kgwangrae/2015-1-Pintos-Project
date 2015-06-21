@@ -46,6 +46,9 @@ filesys_done (void)
 bool
 filesys_create (const char *name, off_t initial_size) 
 {
+   if (*name == '\0') // empty name
+    return false;
+
   block_sector_t inode_sector = 0;
   struct dir *dir = get_dir (name, false);
   char *filename = get_filename (name);
@@ -68,7 +71,7 @@ filesys_create (const char *name, off_t initial_size)
 struct file *
 filesys_open (const char *name)
 {
-  if (*name == '\0') // empty root
+  if (*name == '\0') // empty path
     return NULL;
 
   struct dir *dir = get_dir (name, false);
