@@ -40,11 +40,9 @@ filesys_done (void)
 {
   free_map_close ();
 }
-
-/* Creates a file named NAME with the given INITIAL_SIZE.
-   Returns true if successful, false otherwise.
-   Fails if a file named NAME already exists,
-   or if internal memory allocation fails. */
+
+/* Creates a file named NAME with the given INITIAL_SIZE. Returns true if successful, false otherwise.
+   Fails if a file named NAME already exists, or if internal memory allocation fails. */
 bool
 filesys_create (const char *name, off_t initial_size) 
 {
@@ -184,10 +182,14 @@ struct dir* get_dir (const char* path, bool include_last_token)
 /* returns the file name for given path */
 char* get_filename (const char* path)
 {
-    if(path==NULL || strlen(path)==0)
-        return NULL;
+  /* Invalid path */
+  if(path==NULL || strlen(path)==0) return NULL;
 
-    char *slash = strrchr(path, '/');
-
-    return slash+1;
+  char *slash = strrchr(path, '/');
+  if (slash == NULL) 
+  {
+    /* Opening files in cwd : there's no / in the path. */
+    return path;
+  }
+  else return slash+1;
 }
